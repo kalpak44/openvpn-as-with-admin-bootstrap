@@ -62,6 +62,6 @@ docker restart openvpn
 
 * Wraps the official OpenVPN Access Server image (no changes to core behavior)
 * Admin user is created automatically via `sacli`
-* No hardcoded IPs — use your host or DNS
+* No hardcoded IPs - use your host or DNS
 * `/openvpn` volume is required for persistence
 
