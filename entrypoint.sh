@@ -43,8 +43,22 @@ OPENVPN_ADMIN_USERNAME="$(resolve_value OPENVPN_ADMIN_USERNAME openvpn)"
 OPENVPN_ADMIN_PASSWORD="$(resolve_value OPENVPN_ADMIN_PASSWORD '')"
 OPENVPN_BOOTSTRAP_TIMEOUT_SECONDS="$(resolve_value OPENVPN_BOOTSTRAP_TIMEOUT_SECONDS 120)"
 
+# New env vars for OpenVPN daemon ports
+OPENVPN_UDP_PORT="$(resolve_value OPENVPN_UDP_PORT 1194)"
+OPENVPN_TCP_PORT="$(resolve_value OPENVPN_TCP_PORT 443)"
+
 SACLI_DIR="/usr/local/openvpn_as/scripts"
 SACLI="${SACLI_DIR}/sacli"
+
+validate_port() {
+  local name="$1"
+  local value="$2"
+
+  if [[ ! "$value" =~ ^[0-9]+$ ]] || (( value < 1 || value > 65535 )); then
+    log "ERROR: ${name} must be an integer between 1 and 65535, got '${value}'"
+    exit 1
+  fi
+}
 
 bootstrap_admin_user() {
   if [[ -z "$OPENVPN_ADMIN_PASSWORD" ]]; then
@@ -56,6 +70,8 @@ bootstrap_admin_user() {
   log "  username: ${OPENVPN_ADMIN_USERNAME}"
   log "  password: $(mask_secret "$OPENVPN_ADMIN_PASSWORD")"
   log "  timeout: ${OPENVPN_BOOTSTRAP_TIMEOUT_SECONDS}s"
+  log "  udp_port: ${OPENVPN_UDP_PORT}"
+  log "  tcp_port: ${OPENVPN_TCP_PORT}"
 
   log "Waiting for Access Server agent to become ready..."
 
@@ -74,13 +90,23 @@ bootstrap_admin_user() {
     return 1
   fi
 
+  validate_port OPENVPN_UDP_PORT "$OPENVPN_UDP_PORT"
+  validate_port OPENVPN_TCP_PORT "$OPENVPN_TCP_PORT"
+
+  log "Setting OpenVPN daemon ports"
+  "$SACLI" --key "vpn.server.daemon.udp.port" --value "$OPENVPN_UDP_PORT" ConfigPut
+  "$SACLI" --key "vpn.server.daemon.tcp.port" --value "$OPENVPN_TCP_PORT" ConfigPut
+
   log "Setting password for '${OPENVPN_ADMIN_USERNAME}'"
   "$SACLI" --user "$OPENVPN_ADMIN_USERNAME" --new_pass "$OPENVPN_ADMIN_PASSWORD" SetLocalPassword
 
   log "Ensuring '${OPENVPN_ADMIN_USERNAME}' is admin"
   "$SACLI" --user "$OPENVPN_ADMIN_USERNAME" --key "prop_superuser" --value "true" UserPropPut
 
-  log "Bootstrap completed → username='${OPENVPN_ADMIN_USERNAME}' password='$(mask_secret "$OPENVPN_ADMIN_PASSWORD")'"
+  log "Restarting Access Server to apply config"
+  "$SACLI" start
+
+  log "Bootstrap completed → username='${OPENVPN_ADMIN_USERNAME}' password='$(mask_secret "$OPENVPN_ADMIN_PASSWORD")' udp_port='${OPENVPN_UDP_PORT}' tcp_port='${OPENVPN_TCP_PORT}'"
 }
 
 log "Starting original OpenVPN Access Server entrypoint"
