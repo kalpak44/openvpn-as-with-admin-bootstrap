@@ -5,13 +5,15 @@ log() {
   echo "[openvpn-bootstrap] $*"
 }
 
-# -----------------------------
-# Variable priority
-# Highest priority first:
-# 1) *_FILE secret-backed vars
-# 2) direct env vars
-# 3) built-in defaults
-# -----------------------------
+mask_secret() {
+  local value="${1:-}"
+  if [[ -z "$value" ]]; then
+    printf '%s' "(empty)"
+  else
+    printf '%s' "***"
+  fi
+}
+
 resolve_value() {
   local var_name="$1"
   local default_value="${2:-}"
@@ -37,31 +39,23 @@ resolve_value() {
   printf '%s' "$default_value"
 }
 
-OPENVPN_ADMIN_USERNAME="$(resolve_value OPENVPN_ADMIN_USERNAME admin)"
+OPENVPN_ADMIN_USERNAME="$(resolve_value OPENVPN_ADMIN_USERNAME openvpn)"
 OPENVPN_ADMIN_PASSWORD="$(resolve_value OPENVPN_ADMIN_PASSWORD '')"
-OPENVPN_BOOTSTRAP_ADMIN="$(resolve_value OPENVPN_BOOTSTRAP_ADMIN true)"
 OPENVPN_BOOTSTRAP_TIMEOUT_SECONDS="$(resolve_value OPENVPN_BOOTSTRAP_TIMEOUT_SECONDS 120)"
-OPENVPN_BOOTSTRAP_ONCE="$(resolve_value OPENVPN_BOOTSTRAP_ONCE true)"
 
-MARKER_FILE="/openvpn/etc/admin_user_bootstrapped"
 SACLI_DIR="/usr/local/openvpn_as/scripts"
 SACLI="${SACLI_DIR}/sacli"
 
 bootstrap_admin_user() {
-  if [[ "${OPENVPN_BOOTSTRAP_ADMIN,,}" != "true" ]]; then
-    log "Admin bootstrap disabled"
-    return 0
-  fi
-
   if [[ -z "$OPENVPN_ADMIN_PASSWORD" ]]; then
     log "OPENVPN_ADMIN_PASSWORD is empty; skipping admin bootstrap"
     return 0
   fi
 
-  if [[ "${OPENVPN_BOOTSTRAP_ONCE,,}" == "true" && -f "$MARKER_FILE" ]]; then
-    log "Bootstrap marker exists; skipping admin bootstrap"
-    return 0
-  fi
+  log "Bootstrap config:"
+  log "  username: ${OPENVPN_ADMIN_USERNAME}"
+  log "  password: $(mask_secret "$OPENVPN_ADMIN_PASSWORD")"
+  log "  timeout: ${OPENVPN_BOOTSTRAP_TIMEOUT_SECONDS}s"
 
   log "Waiting for Access Server agent to become ready..."
 
@@ -80,19 +74,13 @@ bootstrap_admin_user() {
     return 1
   fi
 
-  log "Configuring admin user '${OPENVPN_ADMIN_USERNAME}'"
-
+  log "Setting password for '${OPENVPN_ADMIN_USERNAME}'"
   "$SACLI" --user "$OPENVPN_ADMIN_USERNAME" --new_pass "$OPENVPN_ADMIN_PASSWORD" SetLocalPassword
+
+  log "Ensuring '${OPENVPN_ADMIN_USERNAME}' is admin"
   "$SACLI" --user "$OPENVPN_ADMIN_USERNAME" --key "prop_superuser" --value "true" UserPropPut
-  "$SACLI" --user "$OPENVPN_ADMIN_USERNAME" --key "type" --value "user_connect" UserPropPut || true
 
-  if [[ "${OPENVPN_BOOTSTRAP_ONCE,,}" == "true" ]]; then
-    mkdir -p "$(dirname "$MARKER_FILE")"
-    touch "$MARKER_FILE"
-    log "Bootstrap marker written to $MARKER_FILE"
-  fi
-
-  log "Admin bootstrap completed"
+  log "Bootstrap completed → username='${OPENVPN_ADMIN_USERNAME}' password='$(mask_secret "$OPENVPN_ADMIN_PASSWORD")'"
 }
 
 log "Starting original OpenVPN Access Server entrypoint"
