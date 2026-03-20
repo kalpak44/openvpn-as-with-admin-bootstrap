@@ -1,0 +1,22 @@
+# env files
+.env
+.env.local
+.env.*.local
+
+# macOS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# logs
+*.log
+
+# temp
+tmp/
+.cache/
+
+# compose overrides
+docker-compose.override.yml
+
+# local data mounts if someone keeps them inside repo
+openvpn-data/
