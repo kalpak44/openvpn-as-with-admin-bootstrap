@@ -26,7 +26,7 @@ docker run -d \
   --env-file .env \
   -v /path/to/openvpn-data:/openvpn \
   --sysctl net.ipv4.ip_forward=1 \
-  ghcr.io/<your-user>/openvpn-as-with-admin-bootstrap:latest
+  ghcr.io/kalpak44/openvpn-as-with-admin-bootstrap:latest
 ```
 
 ### 3. Open UI
